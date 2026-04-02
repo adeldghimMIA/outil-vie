@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_USER_ID } from "@/lib/default-user";
 import { CalendarSection } from "@/components/calendar/calendar-section";
 import { TaskPanel } from "@/components/tasks/task-panel";
 import type { CalendarEvent, Task } from "@/types";
@@ -10,25 +10,18 @@ export default async function PersoPage() {
 
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      redirect("/login");
-    }
 
     // Fetch all events (perso view shows perso events detailed, pro events as gray)
     const [eventsResult, tasksResult] = await Promise.all([
       supabase
         .from("events")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", DEFAULT_USER_ID)
         .order("start_at", { ascending: true }),
       supabase
         .from("tasks")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", DEFAULT_USER_ID)
         .eq("category", "perso")
         .neq("status", "cancelled")
         .order("priority", { ascending: true })
@@ -38,7 +31,7 @@ export default async function PersoPage() {
     events = (eventsResult.data as CalendarEvent[]) ?? [];
     tasks = (tasksResult.data as Task[]) ?? [];
   } catch {
-    // Supabase not configured or not authenticated
+    // Supabase not configured
   }
 
   return (

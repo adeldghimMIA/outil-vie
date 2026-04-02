@@ -1,0 +1,13 @@
+-- Disable RLS on all public tables (mono-user app, no auth needed)
+ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.events DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activities DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.constraints DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.planning_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.connected_accounts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.quick_notes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_preferences DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_log DISABLE ROW LEVEL SECURITY;

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_USER_ID } from "@/lib/default-user";
 import type {
   Task,
   TaskStatus,
@@ -12,18 +13,8 @@ import type {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function authenticatedClient() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new Error("Non authentifié");
-  }
-
-  return { supabase, user };
+async function getClient() {
+  return await createClient();
 }
 
 // ─── Read Actions ────────────────────────────────────────────────────────────
@@ -36,16 +27,12 @@ export async function getTasks(
     dueDate?: string; // ISO date string (YYYY-MM-DD)
   }
 ): Promise<Task[]> {
-  const { supabase, user } = await authenticatedClient();
-
-  if (user.id !== userId) {
-    throw new Error("Non autorisé");
-  }
+  const supabase = await getClient();
 
   let query = supabase
     .from("tasks")
     .select("*")
-    .eq("user_id", userId)
+    .eq("user_id", DEFAULT_USER_ID)
     .neq("status", "cancelled")
     .order("priority", { ascending: true })
     .order("due_date", { ascending: true, nullsFirst: false });
@@ -77,11 +64,7 @@ export async function getTasksForToday(
   userId: string,
   category?: EventCategory
 ): Promise<Task[]> {
-  const { supabase, user } = await authenticatedClient();
-
-  if (user.id !== userId) {
-    throw new Error("Non autorisé");
-  }
+  const supabase = await getClient();
 
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
@@ -89,7 +72,7 @@ export async function getTasksForToday(
   let query = supabase
     .from("tasks")
     .select("*")
-    .eq("user_id", userId)
+    .eq("user_id", DEFAULT_USER_ID)
     .in("status", ["todo", "scheduled", "in_progress"])
     .lte("due_date", todayEnd.toISOString())
     .order("priority", { ascending: true })
@@ -132,12 +115,12 @@ export interface CreateTaskInput {
 }
 
 export async function createTask(data: CreateTaskInput): Promise<Task> {
-  const { supabase, user } = await authenticatedClient();
+  const supabase = await getClient();
 
   const { data: task, error } = await supabase
     .from("tasks")
     .insert({
-      user_id: user.id,
+      user_id: DEFAULT_USER_ID,
       title: data.title,
       description: data.description ?? null,
       raw_input: data.raw_input ?? null,
@@ -171,14 +154,14 @@ export async function createTask(data: CreateTaskInput): Promise<Task> {
 export async function createTasksBatch(
   tasks: CreateTaskInput[]
 ): Promise<Task[]> {
-  const { supabase, user } = await authenticatedClient();
+  const supabase = await getClient();
 
   if (tasks.length === 0) {
     return [];
   }
 
   const rows = tasks.map((data) => ({
-    user_id: user.id,
+    user_id: DEFAULT_USER_ID,
     title: data.title,
     description: data.description ?? null,
     raw_input: data.raw_input ?? null,
@@ -238,7 +221,7 @@ export async function updateTask(
   id: string,
   data: UpdateTaskInput
 ): Promise<Task> {
-  const { supabase, user } = await authenticatedClient();
+  const supabase = await getClient();
 
   const { data: task, error } = await supabase
     .from("tasks")
@@ -247,7 +230,7 @@ export async function updateTask(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", DEFAULT_USER_ID)
     .select()
     .single();
 
@@ -262,7 +245,7 @@ export async function updateTask(
 // ─── Complete / Delete Actions ───────────────────────────────────────────────
 
 export async function completeTask(id: string): Promise<Task> {
-  const { supabase, user } = await authenticatedClient();
+  const supabase = await getClient();
 
   const { data: task, error } = await supabase
     .from("tasks")
@@ -272,7 +255,7 @@ export async function completeTask(id: string): Promise<Task> {
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", DEFAULT_USER_ID)
     .select()
     .single();
 
@@ -285,7 +268,7 @@ export async function completeTask(id: string): Promise<Task> {
 }
 
 export async function deleteTask(id: string): Promise<Task> {
-  const { supabase, user } = await authenticatedClient();
+  const supabase = await getClient();
 
   const { data: task, error } = await supabase
     .from("tasks")
@@ -294,7 +277,7 @@ export async function deleteTask(id: string): Promise<Task> {
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", DEFAULT_USER_ID)
     .select()
     .single();
 

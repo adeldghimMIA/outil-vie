@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { DEFAULT_USER_ID } from "@/lib/default-user";
 import {
   createTask,
   createTasksBatch,
@@ -43,16 +44,10 @@ export function useTasks(category?: EventCategory, status?: TaskStatus) {
   return useQuery<Task[]>({
     queryKey: taskKeys.list({ category, status }),
     queryFn: async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) throw new Error("Non authentifié");
-
       let query = supabase
         .from("tasks")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", DEFAULT_USER_ID)
         .neq("status", "cancelled")
         .order("priority", { ascending: true })
         .order("due_date", { ascending: true, nullsFirst: false });
@@ -79,19 +74,13 @@ export function useTodayTasks(category?: EventCategory) {
   return useQuery<Task[]>({
     queryKey: taskKeys.today(category),
     queryFn: async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) throw new Error("Non authentifié");
-
       const todayEnd = new Date();
       todayEnd.setHours(23, 59, 59, 999);
 
       let query = supabase
         .from("tasks")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", DEFAULT_USER_ID)
         .in("status", ["todo", "scheduled", "in_progress"])
         .lte("due_date", todayEnd.toISOString())
         .order("priority", { ascending: true })

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { DEFAULT_USER_ID } from "@/lib/default-user";
 import {
   createEvent,
   updateEvent,
@@ -39,18 +40,10 @@ export function useEvents(options: UseEventsOptions = {}) {
     queryFn: async () => {
       const supabase = createClient();
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error("Non authentifié");
-      }
-
       let query = supabase
         .from("events")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", DEFAULT_USER_ID)
         .order("start_at", { ascending: true });
 
       if (category) {

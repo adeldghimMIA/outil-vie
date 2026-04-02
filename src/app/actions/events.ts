@@ -2,24 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_USER_ID } from "@/lib/default-user";
 import type { CalendarEvent, EventCategory } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function getAuthenticatedUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new Error("Non authentifié");
-  }
-
-  return { supabase, user };
+async function getClient() {
+  return await createClient();
 }
 
 // ---------------------------------------------------------------------------
@@ -32,17 +23,12 @@ export async function getEvents(
   startDate?: string,
   endDate?: string
 ): Promise<CalendarEvent[]> {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  // Ensure the caller can only access their own events
-  if (user.id !== userId) {
-    throw new Error("Non autorisé");
-  }
+  const supabase = await getClient();
 
   let query = supabase
     .from("events")
     .select("*")
-    .eq("user_id", userId)
+    .eq("user_id", DEFAULT_USER_ID)
     .order("start_at", { ascending: true });
 
   if (category) {
@@ -70,11 +56,7 @@ export async function getEventsByDate(
   userId: string,
   date: string
 ): Promise<CalendarEvent[]> {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  if (user.id !== userId) {
-    throw new Error("Non autorisé");
-  }
+  const supabase = await getClient();
 
   // Events that overlap with the given day (start < end-of-day AND end > start-of-day)
   const dayStart = `${date}T00:00:00.000Z`;
@@ -83,7 +65,7 @@ export async function getEventsByDate(
   const { data, error } = await supabase
     .from("events")
     .select("*")
-    .eq("user_id", userId)
+    .eq("user_id", DEFAULT_USER_ID)
     .lte("start_at", dayEnd)
     .gte("end_at", dayStart)
     .order("start_at", { ascending: true });
@@ -102,12 +84,12 @@ export async function getEventsByDate(
 export async function createEvent(
   formData: Omit<CalendarEvent, "id" | "user_id" | "created_at" | "updated_at">
 ): Promise<CalendarEvent> {
-  const { supabase, user } = await getAuthenticatedUser();
+  const supabase = await getClient();
 
   const { data, error } = await supabase
     .from("events")
     .insert({
-      user_id: user.id,
+      user_id: DEFAULT_USER_ID,
       title: formData.title,
       description: formData.description,
       location: formData.location,
@@ -145,22 +127,7 @@ export async function updateEvent(
   id: string,
   formData: Partial<Omit<CalendarEvent, "id" | "user_id" | "created_at" | "updated_at">>
 ): Promise<CalendarEvent> {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  // Only allow updating own events
-  const { data: existing, error: fetchError } = await supabase
-    .from("events")
-    .select("user_id")
-    .eq("id", id)
-    .single();
-
-  if (fetchError || !existing) {
-    throw new Error("Événement introuvable");
-  }
-
-  if (existing.user_id !== user.id) {
-    throw new Error("Non autorisé");
-  }
+  const supabase = await getClient();
 
   const { data, error } = await supabase
     .from("events")
@@ -184,22 +151,7 @@ export async function updateEvent(
 }
 
 export async function deleteEvent(id: string): Promise<void> {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  // Only allow deleting own events
-  const { data: existing, error: fetchError } = await supabase
-    .from("events")
-    .select("user_id")
-    .eq("id", id)
-    .single();
-
-  if (fetchError || !existing) {
-    throw new Error("Événement introuvable");
-  }
-
-  if (existing.user_id !== user.id) {
-    throw new Error("Non autorisé");
-  }
+  const supabase = await getClient();
 
   const { error } = await supabase.from("events").delete().eq("id", id);
 
