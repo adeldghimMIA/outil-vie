@@ -23,6 +23,13 @@ const RARITY_BG_COLORS: Record<string, string> = {
   legendary: "bg-amber-50 dark:bg-amber-950",
 };
 
+const RARITY_GLOW: Record<string, string> = {
+  common: "badge-glow-common",
+  rare: "badge-glow-rare",
+  epic: "badge-glow-epic",
+  legendary: "badge-glow-legendary",
+};
+
 const RARITY_LABELS: Record<string, string> = {
   common: "Commun",
   rare: "Rare",
@@ -52,7 +59,11 @@ export function BadgeGrid({ badges, earnedBadgeIds }: BadgeGridProps) {
               "flex flex-col items-center gap-2 rounded-xl border-2 p-3 text-center transition-all",
               RARITY_BORDER_COLORS[badge.rarity] ?? "border-slate-400",
               isEarned
-                ? RARITY_BG_COLORS[badge.rarity] ?? "bg-slate-100 dark:bg-slate-800"
+                ? cn(
+                    RARITY_BG_COLORS[badge.rarity] ?? "bg-slate-100 dark:bg-slate-800",
+                    RARITY_GLOW[badge.rarity],
+                    "hover:scale-105"
+                  )
                 : "border-muted bg-muted/30 grayscale"
             )}
           >

@@ -73,9 +73,11 @@ export function ProgressionClient({ data }: ProgressionClientProps) {
       {/* ── Overview Cards ─────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Global Level */}
-        <Card size="sm">
+        <Card size="sm" className="glass-card">
           <CardContent className="flex items-center gap-3">
-            <LevelBadge level={data.globalLevel} size="lg" />
+            <div className="animate-level-glow rounded-full">
+              <LevelBadge level={data.globalLevel} size="lg" />
+            </div>
             <div>
               <p className="text-xs text-muted-foreground">Niveau global</p>
               <p className="text-lg font-bold">{data.globalLevel}</p>
@@ -90,7 +92,7 @@ export function ProgressionClient({ data }: ProgressionClientProps) {
         </Card>
 
         {/* Total XP */}
-        <Card size="sm">
+        <Card size="sm" className="glass-card">
           <CardContent className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
               <Zap className="size-5" />
@@ -105,7 +107,7 @@ export function ProgressionClient({ data }: ProgressionClientProps) {
         </Card>
 
         {/* Active Streak */}
-        <Card size="sm">
+        <Card size="sm" className="glass-card">
           <CardContent className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
               <Flame className="size-5" />
@@ -118,7 +120,7 @@ export function ProgressionClient({ data }: ProgressionClientProps) {
         </Card>
 
         {/* Badges Earned */}
-        <Card size="sm">
+        <Card size="sm" className="glass-card">
           <CardContent className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
               <Award className="size-5" />
@@ -134,14 +136,15 @@ export function ProgressionClient({ data }: ProgressionClientProps) {
       </div>
 
       {/* ── Radar Chart ────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
+      <Card className="glass-card overflow-hidden relative">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-cyan-500/5" />
+        <CardHeader className="relative">
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="size-5 text-primary" />
             Vue d&apos;ensemble
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="relative">
           <RadarChart data={radarData} />
         </CardContent>
       </Card>

@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Plus, ListTodo, Clock, Calendar } from "lucide-react";
+import { Sparkles, Plus, ListTodo, Clock, Calendar, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { completeTask } from "@/app/actions/tasks";
+import { completeTask, createTasksBatch } from "@/app/actions/tasks";
 import { TaskForm } from "@/components/tasks/task-form";
+import { ParsedTasksReview } from "@/components/tasks/parsed-tasks-review";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
+import type { ParsedTask } from "@/lib/ai/schemas";
 import type { EventCategory, Task, TaskPriority } from "@/types";
 
 interface TaskPanelProps {
@@ -31,6 +33,9 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
   const [rawInput, setRawInput] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [parsedTasks, setParsedTasks] = useState<ParsedTask[] | null>(null);
+  const [_isSaving, startSavingTransition] = useTransition();
 
   const title =
     category === "pro"
@@ -52,8 +57,69 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
     setFormOpen(true);
   }
 
-  function handleExtract() {
-    toast.info("Fonctionnalite IA bientot disponible");
+  async function handleExtract() {
+    if (!rawInput.trim()) return;
+    setIsExtracting(true);
+    try {
+      const res = await fetch("/api/ai/parse-tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawInput: rawInput.trim() }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: "Erreur inconnue" }));
+        throw new Error(
+          (errData as { error?: string }).error ?? `Erreur ${res.status}`
+        );
+      }
+      const data: ParsedTask[] = await res.json();
+      if (data.length === 0) {
+        toast.info("Aucune tache detectee dans le texte.");
+        return;
+      }
+      setParsedTasks(data);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Erreur lors de l'extraction des taches"
+      );
+    } finally {
+      setIsExtracting(false);
+    }
+  }
+
+  function handleConfirmTasks(tasks: ParsedTask[]) {
+    startSavingTransition(async () => {
+      try {
+        const inputs = tasks.map((t) => ({
+          title: t.title,
+          estimated_minutes: t.estimated_minutes,
+          priority: t.priority as TaskPriority,
+          energy_level: t.energy_level as Task["energy_level"],
+          due_date: t.due_date
+            ? new Date(`${t.due_date}T23:59:59`).toISOString()
+            : null,
+          category: t.category as Task["category"],
+          tags: t.tags,
+          raw_input: rawInput,
+        }));
+        const created = await createTasksBatch(inputs);
+        toast.success(`${created.length} tache${created.length > 1 ? "s" : ""} creee${created.length > 1 ? "s" : ""}`);
+        setRawInput("");
+        setParsedTasks(null);
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Erreur lors de la sauvegarde des taches"
+        );
+      }
+    });
+  }
+
+  function handleCancelReview() {
+    setParsedTasks(null);
   }
 
   function handlePlanDay() {
@@ -64,7 +130,7 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
     <>
       <div className="space-y-4">
         {/* Quick capture - always visible */}
-        <Card>
+        <Card className="dark-glass">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -82,26 +148,41 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
             </div>
           </CardHeader>
           <CardContent className="space-y-3 pt-0">
-            <Textarea
-              placeholder="Tape tes notes en vrac... Ex: finir le rapport pour vendredi, acheter du lait, preparer la presentation..."
-              value={rawInput}
-              onChange={(e) => setRawInput(e.target.value)}
-              className="min-h-[100px] resize-none"
-            />
-            <Button
-              size="sm"
-              disabled={!rawInput.trim()}
-              className="gap-2"
-              onClick={handleExtract}
-            >
-              <Sparkles className="h-4 w-4" />
-              Extraire les taches
-            </Button>
+            {parsedTasks ? (
+              <ParsedTasksReview
+                parsedTasks={parsedTasks}
+                onConfirm={handleConfirmTasks}
+                onCancel={handleCancelReview}
+              />
+            ) : (
+              <>
+                <Textarea
+                  placeholder="Tape tes notes en vrac... Ex: finir le rapport pour vendredi, acheter du lait, preparer la presentation..."
+                  value={rawInput}
+                  onChange={(e) => setRawInput(e.target.value)}
+                  className="min-h-[100px] resize-none"
+                  disabled={isExtracting}
+                />
+                <Button
+                  size="sm"
+                  disabled={!rawInput.trim() || isExtracting}
+                  className="gap-2"
+                  onClick={handleExtract}
+                >
+                  {isExtracting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {isExtracting ? "Extraction en cours..." : "Extraire les taches"}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 
         {/* Today's tasks */}
-        <Card>
+        <Card className="dark-glass">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Aujourd&apos;hui

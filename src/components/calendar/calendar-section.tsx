@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useTransition, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon } from "lucide-react";
@@ -15,7 +15,20 @@ import {
   parseISO,
 } from "date-fns";
 import { fr } from "date-fns/locale";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+} from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import { toast } from "sonner";
 import { EventForm } from "@/components/calendar/event-form";
+import { MoveEventDialog } from "@/components/calendar/move-event-dialog";
+import { updateEvent } from "@/app/actions/events";
 import type { CalendarView, EventCategory, CalendarEvent } from "@/types";
 
 interface CalendarSectionProps {
@@ -32,8 +45,31 @@ export function CalendarSection({ category, events }: CalendarSectionProps) {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [clickedDate, setClickedDate] = useState<Date | undefined>(undefined);
 
+  // Drag-and-drop state
+  const [activeDragEvent, setActiveDragEvent] = useState<CalendarEvent | null>(
+    null,
+  );
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [pendingMove, setPendingMove] = useState<{
+    event: CalendarEvent;
+    newStart: Date;
+    newEnd: Date;
+  } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  // Track whether a drag actually occurred to suppress click after drag
+  const didDragRef = useRef(false);
+
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  // Configure pointer sensor with distance constraint so clicks still work
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 8,
+    },
+  });
+  const sensors = useSensors(pointerSensor);
 
   const navigatePrev = () => {
     if (view === "week") setCurrentDate(subWeeks(currentDate, 1));
@@ -66,9 +102,103 @@ export function CalendarSection({ category, events }: CalendarSectionProps) {
     setFormOpen(true);
   }
 
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const data = event.active.data.current as
+      | { event: CalendarEvent }
+      | undefined;
+    if (data?.event) {
+      setActiveDragEvent(data.event);
+      didDragRef.current = true;
+    }
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveDragEvent(null);
+
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeData = active.data.current as
+      | { event: CalendarEvent }
+      | undefined;
+    const overData = over.data.current as
+      | { day: Date; hour: number }
+      | undefined;
+
+    if (!activeData?.event || !overData) return;
+
+    const calEvent = activeData.event;
+    const evStart = parseISO(calEvent.start_at);
+    const evEnd = parseISO(calEvent.end_at);
+    const durationMs = evEnd.getTime() - evStart.getTime();
+
+    // Build new start: target day + target hour, keep minutes from original
+    const newStart = new Date(overData.day);
+    newStart.setHours(overData.hour, evStart.getMinutes(), 0, 0);
+    const newEnd = new Date(newStart.getTime() + durationMs);
+
+    // Don't open dialog if dropped back on same slot
+    if (
+      newStart.getTime() === evStart.getTime()
+    ) {
+      return;
+    }
+
+    setPendingMove({ event: calEvent, newStart, newEnd });
+    setMoveDialogOpen(true);
+  }, []);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDragEvent(null);
+  }, []);
+
+  const handleConfirmMove = useCallback(
+    (mode: "single" | "all") => {
+      if (!pendingMove) return;
+
+      const { event: calEvent, newStart, newEnd } = pendingMove;
+
+      startTransition(async () => {
+        try {
+          await updateEvent(calEvent.id, {
+            start_at: newStart.toISOString(),
+            end_at: newEnd.toISOString(),
+          });
+          toast.success("Evenement deplace");
+        } catch {
+          toast.error("Erreur lors du deplacement");
+        }
+      });
+
+      setMoveDialogOpen(false);
+      setPendingMove(null);
+    },
+    [pendingMove],
+  );
+
+  const handleMoveDialogClose = useCallback((open: boolean) => {
+    setMoveDialogOpen(open);
+    if (!open) {
+      setPendingMove(null);
+    }
+  }, []);
+
+  // Wrapper for event click that suppresses click right after drag
+  const handleEventClick = useCallback(
+    (ev: CalendarEvent) => {
+      if (didDragRef.current) {
+        didDragRef.current = false;
+        return;
+      }
+      handleOpenEdit(ev);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   return (
     <>
-      <Card>
+      <Card className="dark-glass">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -127,27 +257,39 @@ export function CalendarSection({ category, events }: CalendarSectionProps) {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {view === "week" ? (
-            <WeekView
-              weekDays={weekDays}
-              category={category}
-              events={events}
-              onCellClick={handleOpenCreate}
-              onEventClick={handleOpenEdit}
-            />
-          ) : view === "day" ? (
-            <DayView
-              date={currentDate}
-              category={category}
-              events={events}
-              onCellClick={handleOpenCreate}
-              onEventClick={handleOpenEdit}
-            />
-          ) : (
-            <div className="flex items-center justify-center p-12 text-muted-foreground">
-              Vue mensuelle bientot disponible
-            </div>
-          )}
+          <DndContext
+            sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            {view === "week" ? (
+              <WeekView
+                weekDays={weekDays}
+                category={category}
+                events={events}
+                onCellClick={handleOpenCreate}
+                onEventClick={handleEventClick}
+              />
+            ) : view === "day" ? (
+              <DayView
+                date={currentDate}
+                category={category}
+                events={events}
+                onCellClick={handleOpenCreate}
+                onEventClick={handleEventClick}
+              />
+            ) : (
+              <div className="flex items-center justify-center p-12 text-muted-foreground">
+                Vue mensuelle bientot disponible
+              </div>
+            )}
+            <DragOverlay dropAnimation={null}>
+              {activeDragEvent ? (
+                <DragGhost event={activeDragEvent} />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </CardContent>
       </Card>
 
@@ -158,7 +300,41 @@ export function CalendarSection({ category, events }: CalendarSectionProps) {
         defaultCategory={category ?? undefined}
         defaultDate={clickedDate}
       />
+
+      {pendingMove && (
+        <MoveEventDialog
+          open={moveDialogOpen}
+          onOpenChange={handleMoveDialogClose}
+          event={pendingMove.event}
+          newStart={pendingMove.newStart}
+          newEnd={pendingMove.newEnd}
+          onConfirm={handleConfirmMove}
+        />
+      )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Drag ghost shown during drag
+// ---------------------------------------------------------------------------
+
+function DragGhost({ event }: { event: CalendarEvent }) {
+  return (
+    <div
+      className="pointer-events-none w-32 rounded px-2 py-1 text-[11px] leading-tight text-white shadow-lg opacity-90"
+      style={{
+        backgroundColor: event.color ?? "#3b82f6",
+      }}
+    >
+      <span className="font-medium truncate block">{event.title}</span>
+      {!event.all_day && (
+        <span className="text-[9px] opacity-80 truncate block">
+          {format(parseISO(event.start_at), "HH:mm")} -{" "}
+          {format(parseISO(event.end_at), "HH:mm")}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -231,10 +407,10 @@ function getEventBlocksForDay(
 }
 
 // ---------------------------------------------------------------------------
-// Event block component
+// Draggable event block component
 // ---------------------------------------------------------------------------
 
-function EventBlockComponent({
+function DraggableEventBlock({
   block,
   onClick,
 }: {
@@ -243,18 +419,27 @@ function EventBlockComponent({
 }) {
   const { event, top, height, isSimplified } = block;
 
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `event-${event.id}`,
+    data: { event },
+  });
+
   if (isSimplified) {
     return (
       <button
+        ref={setNodeRef}
         type="button"
         onClick={() => onClick(event)}
-        className="absolute inset-x-0.5 z-10 overflow-hidden rounded px-1 text-[10px] leading-tight bg-gray-300/60 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400 hover:opacity-80 transition-opacity cursor-pointer border border-gray-300 dark:border-gray-600"
+        className="absolute inset-x-0.5 z-10 overflow-hidden rounded px-1 text-[10px] leading-tight bg-gray-300/60 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400 hover:opacity-80 transition-opacity cursor-pointer border border-gray-300 dark:border-gray-600 touch-none"
         style={{
           top: `${top}%`,
           height: `${height}%`,
           minHeight: "14px",
+          opacity: isDragging ? 0.4 : undefined,
         }}
         title={`${event.category === "pro" ? "[Pro]" : "[Perso]"} ${event.title}`}
+        {...listeners}
+        {...attributes}
       >
         <span className="truncate block">{event.title}</span>
       </button>
@@ -263,16 +448,20 @@ function EventBlockComponent({
 
   return (
     <button
+      ref={setNodeRef}
       type="button"
       onClick={() => onClick(event)}
-      className="absolute inset-x-0.5 z-10 overflow-hidden rounded px-1.5 py-0.5 text-[11px] leading-tight text-white hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+      className="absolute inset-x-0.5 z-10 overflow-hidden rounded px-1.5 py-0.5 text-[11px] leading-tight text-white hover:opacity-90 transition-opacity cursor-pointer shadow-sm touch-none"
       style={{
         top: `${top}%`,
         height: `${height}%`,
         minHeight: "18px",
         backgroundColor: event.color ?? "#3b82f6",
+        opacity: isDragging ? 0.4 : undefined,
       }}
       title={event.title}
+      {...listeners}
+      {...attributes}
     >
       <span className="font-medium truncate block">{event.title}</span>
       {height > 5 && !event.all_day && (
@@ -287,6 +476,41 @@ function EventBlockComponent({
         </span>
       )}
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Droppable cell component
+// ---------------------------------------------------------------------------
+
+function DroppableCell({
+  id,
+  day,
+  hour,
+  className,
+  onClick,
+}: {
+  id: string;
+  day: Date;
+  hour: number;
+  className: string;
+  onClick: (date: Date) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id,
+    data: { day, hour },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className}${isOver ? " bg-primary/10 ring-1 ring-inset ring-primary/30" : ""}`}
+      onClick={() => {
+        const clickDate = new Date(day);
+        clickDate.setHours(hour, 0, 0, 0);
+        onClick(clickDate);
+      }}
+    />
   );
 }
 
@@ -349,19 +573,17 @@ function WeekView({
                 {hour}:00
               </div>
               {weekDays.map((day) => (
-                <div
+                <DroppableCell
                   key={`${day.toISOString()}-${hour}`}
+                  id={`week-${day.toISOString()}-${hour}`}
+                  day={day}
+                  hour={hour}
                   className="h-12 border-b border-l transition-colors hover:bg-muted/50 cursor-pointer"
-                  onClick={() => {
-                    const clickDate = new Date(day);
-                    clickDate.setHours(hour, 0, 0, 0);
-                    onCellClick(clickDate);
-                  }}
+                  onClick={onCellClick}
                 />
               ))}
             </div>
           ))}
-          {/* Overlay: event blocks positioned absolutely within each column */}
         </div>
         {/* Events overlay: positioned on top of the time grid */}
         <div
@@ -378,7 +600,7 @@ function WeekView({
               className="pointer-events-auto relative border-l"
             >
               {blocks.map((block) => (
-                <EventBlockComponent
+                <DraggableEventBlock
                   key={block.event.id}
                   block={block}
                   onClick={onEventClick}
@@ -422,13 +644,12 @@ function DayView({
           <div className="w-16 shrink-0 p-2 text-right text-xs text-muted-foreground">
             {hour}:00
           </div>
-          <div
+          <DroppableCell
+            id={`day-${date.toISOString()}-${hour}`}
+            day={date}
+            hour={hour}
             className="flex-1 h-14 border-l transition-colors hover:bg-muted/50 cursor-pointer"
-            onClick={() => {
-              const clickDate = new Date(date);
-              clickDate.setHours(hour, 0, 0, 0);
-              onCellClick(clickDate);
-            }}
+            onClick={onCellClick}
           />
         </div>
       ))}
@@ -439,7 +660,7 @@ function DayView({
       >
         <div className="pointer-events-auto relative h-full">
           {blocks.map((block) => (
-            <EventBlockComponent
+            <DraggableEventBlock
               key={block.event.id}
               block={block}
               onClick={onEventClick}

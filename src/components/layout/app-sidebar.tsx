@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -26,7 +27,12 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { ModeToggle } from "@/components/layout/mode-toggle";
+import { useUIStore } from "@/stores/ui-store";
+import { DEFAULT_USER_ID } from "@/lib/default-user";
+import { createClient } from "@/lib/supabase/client";
+import { getLevelProgress } from "@/lib/gamification/level-calculator";
 
 const mainNav = [
   { href: "/global", label: "Dashboard", icon: LayoutDashboard },
@@ -50,10 +56,43 @@ const outilsNav = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const activeMode = useUIStore((s) => s.activeMode);
+  const [levelInfo, setLevelInfo] = useState({ level: 1, progress: 0 });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchXP() {
+      try {
+        const supabase = createClient();
+        const { data: levels } = await supabase
+          .from("user_levels")
+          .select("total_xp")
+          .eq("user_id", DEFAULT_USER_ID);
+
+        if (cancelled) return;
+
+        const totalXP =
+          levels?.reduce((sum, l) => sum + ((l.total_xp as number) ?? 0), 0) ?? 0;
+        const info = getLevelProgress(totalXP);
+        setLevelInfo({ level: info.level, progress: info.progress });
+      } catch {
+        // Non-blocking: keep default level 1
+      }
+    }
+
+    fetchXP();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href + "/");
   }
+
+  const showViePro = activeMode !== "perso";
+  const showViePerso = activeMode !== "pro";
 
   return (
     <Sidebar collapsible="icon">
@@ -68,14 +107,23 @@ export function AppSidebar() {
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">Outil de Vie</span>
                 <Badge variant="secondary" className="w-fit text-[10px] px-1.5 py-0">
-                  Niveau 1
+                  Niveau {levelInfo.level}
                 </Badge>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="px-2 group-data-[collapsible=icon]:hidden">
+        <div className="px-2 group-data-[collapsible=icon]:hidden space-y-2">
           <ModeToggle />
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Niveau {levelInfo.level}</span>
+              <span>{Math.round(levelInfo.progress)}%</span>
+            </div>
+            <Progress value={levelInfo.progress}>
+              <span className="sr-only">{Math.round(levelInfo.progress)}% progression</span>
+            </Progress>
+          </div>
         </div>
       </SidebarHeader>
 
@@ -102,43 +150,47 @@ export function AppSidebar() {
 
         <SidebarSeparator />
 
-        {/* Vie Pro */}
-        <SidebarGroup>
-          <SidebarGroupLabel>VIE PRO</SidebarGroupLabel>
-          <SidebarMenu>
-            {vieProNav.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton
-                  render={<Link href={item.href} />}
-                  isActive={isActive(item.href)}
-                  tooltip={item.label}
-                >
-                  <item.icon className={`size-4 ${item.color}`} />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+        {/* Vie Pro - hidden when mode is "perso" */}
+        {showViePro && (
+          <SidebarGroup>
+            <SidebarGroupLabel>VIE PRO</SidebarGroupLabel>
+            <SidebarMenu>
+              {vieProNav.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    render={<Link href={item.href} />}
+                    isActive={isActive(item.href)}
+                    tooltip={item.label}
+                  >
+                    <item.icon className={`size-4 ${item.color}`} />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
 
-        {/* Vie Perso */}
-        <SidebarGroup>
-          <SidebarGroupLabel>VIE PERSO</SidebarGroupLabel>
-          <SidebarMenu>
-            {viePersoNav.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton
-                  render={<Link href={item.href} />}
-                  isActive={isActive(item.href)}
-                  tooltip={item.label}
-                >
-                  <item.icon className={`size-4 ${item.color}`} />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+        {/* Vie Perso - hidden when mode is "pro" */}
+        {showViePerso && (
+          <SidebarGroup>
+            <SidebarGroupLabel>VIE PERSO</SidebarGroupLabel>
+            <SidebarMenu>
+              {viePersoNav.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    render={<Link href={item.href} />}
+                    isActive={isActive(item.href)}
+                    tooltip={item.label}
+                  >
+                    <item.icon className={`size-4 ${item.color}`} />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
 
         <SidebarSeparator />
 

@@ -22,7 +22,9 @@ export function StreakIndicator({
         <Flame
           className={cn(
             "size-4",
-            isActive ? "text-orange-500" : "text-muted-foreground"
+            isActive
+              ? "text-orange-500 animate-streak-pulse"
+              : "text-muted-foreground"
           )}
         />
         <span
