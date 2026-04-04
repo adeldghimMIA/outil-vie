@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { createEvent, updateEvent } from "@/app/actions/events";
+import { createEvent, updateEvent, deleteEvent } from "@/app/actions/events";
+import { Trash2 } from "lucide-react";
 import type {
   CalendarEvent,
   EventCategory,
@@ -59,6 +60,7 @@ export function EventForm({
 }: EventFormProps) {
   const isEditing = !!event;
   const [isPending, startTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
 
   const now = defaultDate ?? new Date();
   const defaultStart = event
@@ -84,6 +86,23 @@ export function EventForm({
     event?.recurrence ?? "none"
   );
   const [isUrgent, setIsUrgent] = useState(event?.is_urgent ?? false);
+
+  function handleDelete() {
+    if (!event) return;
+    startDeleteTransition(async () => {
+      try {
+        await deleteEvent(event.id);
+        toast.success("Evenement supprime");
+        onOpenChange(false);
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Erreur lors de la suppression"
+        );
+      }
+    });
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -323,10 +342,22 @@ export function EventForm({
           </div>
 
           <DialogFooter>
+            {isEditing && (
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={isDeleting || isPending}
+                onClick={handleDelete}
+                className="gap-1.5 sm:mr-auto"
+              >
+                <Trash2 className="h-4 w-4" />
+                {isDeleting ? "Suppression..." : "Supprimer"}
+              </Button>
+            )}
             <DialogClose render={<Button variant="outline" />}>
               Annuler
             </DialogClose>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || isDeleting}>
               {isPending
                 ? "Enregistrement..."
                 : isEditing

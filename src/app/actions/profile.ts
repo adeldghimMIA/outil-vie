@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_USER_ID } from "@/lib/default-user";
 
 // ---------------------------------------------------------------------------
@@ -27,14 +28,22 @@ export async function uploadBanner(formData: FormData): Promise<string> {
     throw new Error("Le fichier est trop volumineux. Taille maximale : 5 Mo.");
   }
 
-  const supabase = await createClient();
+  // Use admin client (service role) for storage operations
+  const adminClient = createAdminClient();
+
+  // Ensure the "banners" bucket exists (idempotent - OK if already exists)
+  try {
+    await adminClient.storage.createBucket("banners", { public: true });
+  } catch {
+    // Bucket may already exist, that's fine
+  }
 
   // Generate unique filename
   const ext = file.name.split(".").pop() ?? "jpg";
   const fileName = `${DEFAULT_USER_ID}/banner-${Date.now()}.${ext}`;
 
-  // Upload to Supabase Storage
-  const { error: uploadError } = await supabase.storage
+  // Upload to Supabase Storage using admin client
+  const { error: uploadError } = await adminClient.storage
     .from("banners")
     .upload(fileName, file, {
       cacheControl: "3600",
@@ -45,14 +54,15 @@ export async function uploadBanner(formData: FormData): Promise<string> {
     throw new Error(`Erreur lors de l'upload : ${uploadError.message}`);
   }
 
-  // Get public URL
-  const { data: urlData } = supabase.storage
+  // Get public URL using admin client
+  const { data: urlData } = adminClient.storage
     .from("banners")
     .getPublicUrl(fileName);
 
   const bannerUrl = urlData.publicUrl;
 
-  // Update profile with new banner URL
+  // Update profile with new banner URL (use regular server client for RLS)
+  const supabase = await createClient();
   const { error: updateError } = await supabase
     .from("profiles")
     .update({

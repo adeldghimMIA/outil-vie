@@ -26,6 +26,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { ModeToggle } from "@/components/layout/mode-toggle";
 
 const mainNav = [
   { href: "/global", label: "Dashboard", icon: LayoutDashboard },
@@ -57,11 +58,11 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       {/* Header */}
-      <SidebarHeader>
+      <SidebarHeader className="space-y-3">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/global" />} tooltip="Outil de Vie">
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 via-purple-600 to-emerald-500 text-white">
                 <LayoutDashboard className="size-4" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
@@ -73,6 +74,9 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <div className="px-2 group-data-[collapsible=icon]:hidden">
+          <ModeToggle />
+        </div>
       </SidebarHeader>
 
       <SidebarSeparator />

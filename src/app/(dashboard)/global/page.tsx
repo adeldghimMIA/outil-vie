@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_USER_ID } from "@/lib/default-user";
-import { CalendarSection } from "@/components/calendar/calendar-section";
-import { TaskPanel } from "@/components/tasks/task-panel";
+import { GlobalDashboard } from "./global-dashboard";
 import type { CalendarEvent, Task } from "@/types";
 
 export default async function GlobalPage() {
@@ -32,14 +31,5 @@ export default async function GlobalPage() {
     // Supabase not configured
   }
 
-  return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-      <div className="space-y-4">
-        <CalendarSection category={null} events={events} />
-      </div>
-      <aside className="space-y-4">
-        <TaskPanel category={null} tasks={tasks} />
-      </aside>
-    </div>
-  );
+  return <GlobalDashboard events={events} tasks={tasks} />;
 }

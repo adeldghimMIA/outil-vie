@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Plus, ListTodo, Clock, Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, Plus, ListTodo, Clock, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { completeTask } from "@/app/actions/tasks";
 import { TaskForm } from "@/components/tasks/task-form";
@@ -29,7 +29,6 @@ const priorityConfig: Record<TaskPriority, { label: string; color: string }> = {
 
 export function TaskPanel({ category, tasks }: TaskPanelProps) {
   const [rawInput, setRawInput] = useState("");
-  const [showInput, setShowInput] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
@@ -64,7 +63,7 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
   return (
     <>
       <div className="space-y-4">
-        {/* Quick capture */}
+        {/* Quick capture - always visible */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -72,57 +71,33 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
                 <ListTodo className="h-5 w-5" />
                 {title}
               </CardTitle>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleOpenCreate}
-                  title="Nouvelle tache"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowInput(!showInput)}
-                >
-                  {showInput ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenCreate}
+                title="Nouvelle tache"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
           </CardHeader>
-          {showInput && (
-            <CardContent className="space-y-3 pt-0">
-              <Textarea
-                placeholder="Tape tes notes en vrac... Ex: finir le rapport pour vendredi, acheter du lait, preparer la presentation..."
-                value={rawInput}
-                onChange={(e) => setRawInput(e.target.value)}
-                className="min-h-[100px] resize-none"
-              />
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  disabled={!rawInput.trim()}
-                  className="gap-2"
-                  onClick={handleExtract}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Extraire les taches
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowInput(false)}
-                >
-                  Annuler
-                </Button>
-              </div>
-            </CardContent>
-          )}
+          <CardContent className="space-y-3 pt-0">
+            <Textarea
+              placeholder="Tape tes notes en vrac... Ex: finir le rapport pour vendredi, acheter du lait, preparer la presentation..."
+              value={rawInput}
+              onChange={(e) => setRawInput(e.target.value)}
+              className="min-h-[100px] resize-none"
+            />
+            <Button
+              size="sm"
+              disabled={!rawInput.trim()}
+              className="gap-2"
+              onClick={handleExtract}
+            >
+              <Sparkles className="h-4 w-4" />
+              Extraire les taches
+            </Button>
+          </CardContent>
         </Card>
 
         {/* Today's tasks */}

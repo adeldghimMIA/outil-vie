@@ -15,7 +15,7 @@ export function AppShell({ children, bannerUrl, userName }: AppShellProps) {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
+        <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6 lg:p-8">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
           </div>
