@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_USER_ID } from "@/lib/default-user";
+import { getTaskXP } from "@/lib/gamification/xp-calculator";
+import { awardXP } from "@/app/actions/gamification";
 import type {
   Task,
   TaskStatus,
@@ -263,8 +265,28 @@ export async function completeTask(id: string): Promise<Task> {
     throw new Error(`Erreur lors de la complétion de la tâche : ${error.message}`);
   }
 
+  const completedTask = task as Task;
+
+  // Award XP if the task is linked to a gamification axis
+  if (completedTask.axis_id) {
+    const xpAmount = getTaskXP(completedTask.priority);
+    try {
+      await awardXP({
+        userId: DEFAULT_USER_ID,
+        axisId: completedTask.axis_id,
+        sourceType: "task_completed",
+        sourceId: completedTask.id,
+        xpAmount,
+        description: `Task completed: ${completedTask.title}`,
+      });
+    } catch {
+      // XP awarding is non-blocking; log but don't fail the task completion
+      console.error("Failed to award XP for completed task:", completedTask.id);
+    }
+  }
+
   revalidatePath("/", "layout");
-  return task as Task;
+  return completedTask;
 }
 
 export async function deleteTask(id: string): Promise<Task> {

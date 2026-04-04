@@ -82,6 +82,8 @@ export interface Task {
   sequence_order: number | null;
   depends_on: string[];
   ai_confidence: number | null;
+  axis_id: string | null;
+  xp_value: number;
   created_at: string;
   updated_at: string;
 }
@@ -118,6 +120,8 @@ export interface Activity {
   total_sessions: number;
   active: boolean;
   started_at: string;
+  axis_id: string | null;
+  xp_per_session: number;
   created_at: string;
   updated_at: string;
 }
