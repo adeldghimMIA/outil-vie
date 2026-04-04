@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Sparkles, Plus, ListTodo, Clock, Calendar, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { completeTask, createTasksBatch } from "@/app/actions/tasks";
+import { completeTask, uncompleteTask, createTasksBatch } from "@/app/actions/tasks";
+import { getProjects, createProject } from "@/app/actions/projects";
 import { TaskForm } from "@/components/tasks/task-form";
 import { ParsedTasksReview } from "@/components/tasks/parsed-tasks-review";
 import { format, parseISO } from "date-fns";
@@ -30,6 +32,7 @@ const priorityConfig: Record<TaskPriority, { label: string; color: string }> = {
 };
 
 export function TaskPanel({ category, tasks }: TaskPanelProps) {
+  const router = useRouter();
   const [rawInput, setRawInput] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -89,11 +92,39 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
     }
   }
 
-  function handleConfirmTasks(tasks: ParsedTask[]) {
+  function handleConfirmTasks(confirmedTasks: ParsedTask[]) {
     startSavingTransition(async () => {
       try {
-        const inputs = tasks.map((t) => ({
+        // Resolve project names to project IDs
+        const uniqueProjectNames = [
+          ...new Set(
+            confirmedTasks
+              .map((t) => t.project_name)
+              .filter((name): name is string => name !== null && name.trim() !== "")
+          ),
+        ];
+
+        const projectNameToId: Record<string, string> = {};
+
+        if (uniqueProjectNames.length > 0) {
+          const existingProjects = await getProjects();
+
+          for (const name of uniqueProjectNames) {
+            const match = existingProjects.find(
+              (p) => p.name.toLowerCase() === name.toLowerCase()
+            );
+            if (match) {
+              projectNameToId[name] = match.id;
+            } else {
+              const newProject = await createProject({ name });
+              projectNameToId[name] = newProject.id;
+            }
+          }
+        }
+
+        const inputs = confirmedTasks.map((t) => ({
           title: t.title,
+          description: t.notes ?? null,
           estimated_minutes: t.estimated_minutes,
           priority: t.priority as TaskPriority,
           energy_level: t.energy_level as Task["energy_level"],
@@ -103,6 +134,10 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
           category: t.category as Task["category"],
           tags: t.tags,
           raw_input: rawInput,
+          project_id:
+            t.project_name && projectNameToId[t.project_name]
+              ? projectNameToId[t.project_name]
+              : null,
         }));
         const created = await createTasksBatch(inputs);
         toast.success(`${created.length} tache${created.length > 1 ? "s" : ""} creee${created.length > 1 ? "s" : ""}`);
@@ -123,7 +158,7 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
   }
 
   function handlePlanDay() {
-    toast.info("Fonctionnalite IA bientot disponible");
+    router.push("/preparer-journee");
   }
 
   return (
@@ -266,15 +301,19 @@ function TaskRow({
   const isDone = task.status === "done";
   const config = priorityConfig[task.priority];
 
-  function handleComplete() {
-    if (isDone) return;
+  function handleToggleComplete() {
     startTransition(async () => {
       try {
-        await completeTask(task.id);
-        toast.success(`"${task.title}" completee`);
+        if (isDone) {
+          await uncompleteTask(task.id);
+          toast.success(`"${task.title}" reouvertes`);
+        } else {
+          await completeTask(task.id);
+          toast.success(`"${task.title}" completee`);
+        }
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "Erreur lors de la completion"
+          error instanceof Error ? error.message : "Erreur lors de la mise a jour"
         );
       }
     });
@@ -289,8 +328,8 @@ function TaskRow({
       <div className="pt-0.5">
         <Checkbox
           checked={isDone}
-          onCheckedChange={handleComplete}
-          disabled={isDone || isPending}
+          onCheckedChange={handleToggleComplete}
+          disabled={isPending}
         />
       </div>
       <button

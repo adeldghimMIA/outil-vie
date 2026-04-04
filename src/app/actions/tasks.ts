@@ -289,6 +289,29 @@ export async function completeTask(id: string): Promise<Task> {
   return completedTask;
 }
 
+export async function uncompleteTask(id: string): Promise<Task> {
+  const supabase = await getClient();
+
+  const { data: task, error } = await supabase
+    .from("tasks")
+    .update({
+      status: "todo" as TaskStatus,
+      completed_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("user_id", DEFAULT_USER_ID)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Erreur lors de la réouverture de la tâche : ${error.message}`);
+  }
+
+  revalidatePath("/", "layout");
+  return task as Task;
+}
+
 export async function deleteTask(id: string): Promise<Task> {
   const supabase = await getClient();
 

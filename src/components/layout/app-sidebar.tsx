@@ -8,8 +8,6 @@ import {
   Calendar,
   CheckSquare,
   FolderKanban,
-  Briefcase,
-  User,
   Trophy,
   Sparkles,
   Settings,
@@ -41,12 +39,7 @@ const mainNav = [
   { href: "/projects", label: "Projets", icon: FolderKanban },
 ] as const;
 
-const vieProNav = [
-  { href: "/pro", label: "Vue Pro", icon: Briefcase, color: "text-blue-500" },
-] as const;
-
-const viePersoNav = [
-  { href: "/perso", label: "Vue Perso", icon: User, color: "text-emerald-500" },
+const persoNav = [
   { href: "/progression", label: "Progression", icon: Trophy, color: "text-amber-500" },
 ] as const;
 
@@ -91,8 +84,7 @@ export function AppSidebar() {
     return pathname === href || pathname.startsWith(href + "/");
   }
 
-  const showViePro = activeMode !== "perso";
-  const showViePerso = activeMode !== "pro";
+  const showPerso = activeMode !== "pro";
 
   return (
     <Sidebar collapsible="icon">
@@ -150,33 +142,12 @@ export function AppSidebar() {
 
         <SidebarSeparator />
 
-        {/* Vie Pro - hidden when mode is "perso" */}
-        {showViePro && (
+        {/* Perso - hidden when mode is "pro" */}
+        {showPerso && (
           <SidebarGroup>
-            <SidebarGroupLabel>VIE PRO</SidebarGroupLabel>
+            <SidebarGroupLabel>PERSO</SidebarGroupLabel>
             <SidebarMenu>
-              {vieProNav.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<Link href={item.href} />}
-                    isActive={isActive(item.href)}
-                    tooltip={item.label}
-                  >
-                    <item.icon className={`size-4 ${item.color}`} />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
-
-        {/* Vie Perso - hidden when mode is "pro" */}
-        {showViePerso && (
-          <SidebarGroup>
-            <SidebarGroupLabel>VIE PERSO</SidebarGroupLabel>
-            <SidebarMenu>
-              {viePersoNav.map((item) => (
+              {persoNav.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     render={<Link href={item.href} />}

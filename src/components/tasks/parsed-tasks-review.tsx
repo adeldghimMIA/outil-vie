@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,6 +20,7 @@ import {
   Calendar,
   Zap,
   Tag,
+  FolderKanban,
   CheckCircle2,
   ArrowLeft,
 } from "lucide-react";
@@ -98,6 +100,39 @@ export function ParsedTasksReview({
                     updateTask(index, { title: e.target.value })
                   }
                   className="h-8 text-sm"
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Notes</Label>
+                <Textarea
+                  value={task.notes ?? ""}
+                  onChange={(e) =>
+                    updateTask(index, {
+                      notes: e.target.value || null,
+                    })
+                  }
+                  placeholder="Details, contexte, precisions..."
+                  className="min-h-[60px] resize-none text-xs"
+                />
+              </div>
+
+              {/* Project */}
+              <div className="space-y-1">
+                <Label className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <FolderKanban className="h-3 w-3" />
+                  Projet
+                </Label>
+                <Input
+                  value={task.project_name ?? ""}
+                  onChange={(e) =>
+                    updateTask(index, {
+                      project_name: e.target.value || null,
+                    })
+                  }
+                  placeholder="Aucun projet detecte"
+                  className="h-8 text-xs"
                 />
               </div>
 
