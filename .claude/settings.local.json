@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(/opt/anaconda3/bin/git add:*)",
+      "Bash(/opt/anaconda3/bin/git commit -m ':*)"
+    ]
+  }
+}

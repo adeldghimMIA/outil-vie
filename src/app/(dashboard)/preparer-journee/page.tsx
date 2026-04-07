@@ -21,6 +21,9 @@ export default async function PreparerJourneePage() {
     getTasksForToday(DEFAULT_USER_ID),
   ]);
 
+  // Filter out task_block events so they don't duplicate scheduled task blocks
+  const calendarEvents = events.filter((e) => e.event_type !== "task_block");
+
   // Separate scheduled vs unscheduled tasks
   const scheduledTasks = tasks.filter(
     (t) => t.scheduled_start && t.scheduled_end
@@ -54,7 +57,7 @@ export default async function PreparerJourneePage() {
           <CardContent>
             <ScrollArea className="h-[calc(100vh-260px)]">
               <DayTimeline
-                events={events}
+                events={calendarEvents}
                 scheduledTasks={scheduledTasks}
                 date={today}
               />
