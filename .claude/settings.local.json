@@ -4,7 +4,9 @@
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
       "Bash(/opt/anaconda3/bin/git add:*)",
-      "Bash(/opt/anaconda3/bin/git commit -m ':*)"
+      "Bash(/opt/anaconda3/bin/git commit -m ':*)",
+      "Bash(/opt/anaconda3/bin/git push:*)",
+      "Bash(vercel --prod)"
     ]
   }
 }

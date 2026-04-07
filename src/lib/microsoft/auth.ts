@@ -21,7 +21,7 @@ const SCOPES = [
 function getRedirectUri(): string {
   const base =
     process.env.NEXT_PUBLIC_APP_URL || "https://outilvie.vercel.app";
-  return `${base}/api/auth/microsoft/callback`;
+  return `${base}/api/auth/callback/microsoft`;
 }
 
 // ---------------------------------------------------------------------------

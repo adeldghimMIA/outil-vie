@@ -12,8 +12,18 @@ import { toast } from "sonner";
 import { completeTask, uncompleteTask, createTasksBatch } from "@/app/actions/tasks";
 import { getProjects, createProject } from "@/app/actions/projects";
 import { TaskForm } from "@/components/tasks/task-form";
+import { TaskDetail } from "@/components/tasks/task-detail";
 import { ParsedTasksReview } from "@/components/tasks/parsed-tasks-review";
-import { format, parseISO } from "date-fns";
+import {
+  format,
+  parseISO,
+  isToday,
+  isTomorrow,
+  isBefore,
+  startOfDay,
+  endOfWeek,
+  isAfter,
+} from "date-fns";
 import { fr } from "date-fns/locale";
 import type { ParsedTask } from "@/lib/ai/schemas";
 import type { EventCategory, Task, TaskPriority } from "@/types";
@@ -31,11 +41,80 @@ const priorityConfig: Record<TaskPriority, { label: string; color: string }> = {
   5: { label: "Optionnel", color: "bg-gray-400 text-white" },
 };
 
+// ---------------------------------------------------------------------------
+// Date segmentation helpers
+// ---------------------------------------------------------------------------
+
+interface TaskGroup {
+  key: string;
+  label: string;
+  tasks: Task[];
+}
+
+function segmentTasks(tasks: Task[]): TaskGroup[] {
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const weekEnd = endOfWeek(now, { weekStartsOn: 1 }); // Monday start
+
+  const overdue: Task[] = [];
+  const today: Task[] = [];
+  const tomorrow: Task[] = [];
+  const thisWeek: Task[] = [];
+  const later: Task[] = [];
+
+  for (const task of tasks) {
+    if (!task.due_date) {
+      later.push(task);
+      continue;
+    }
+
+    const dueDate = startOfDay(parseISO(task.due_date));
+
+    if (isBefore(dueDate, todayStart)) {
+      overdue.push(task);
+    } else if (isToday(dueDate)) {
+      today.push(task);
+    } else if (isTomorrow(dueDate)) {
+      tomorrow.push(task);
+    } else if (!isAfter(dueDate, weekEnd)) {
+      thisWeek.push(task);
+    } else {
+      later.push(task);
+    }
+  }
+
+  const groups: TaskGroup[] = [];
+
+  if (overdue.length > 0) {
+    groups.push({ key: "overdue", label: "En retard", tasks: overdue });
+  }
+  if (today.length > 0) {
+    groups.push({ key: "today", label: "Aujourd'hui", tasks: today });
+  }
+  if (tomorrow.length > 0) {
+    groups.push({ key: "tomorrow", label: "Demain", tasks: tomorrow });
+  }
+  if (thisWeek.length > 0) {
+    groups.push({ key: "week", label: "Cette semaine", tasks: thisWeek });
+  }
+  if (later.length > 0) {
+    groups.push({ key: "later", label: "Plus tard", tasks: later });
+  }
+
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// TaskPanel
+// ---------------------------------------------------------------------------
+
 export function TaskPanel({ category, tasks }: TaskPanelProps) {
   const router = useRouter();
   const [rawInput, setRawInput] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [parsedTasks, setParsedTasks] = useState<ParsedTask[] | null>(null);
   const [_isSaving, startSavingTransition] = useTransition();
@@ -50,9 +129,16 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
   const pendingTasks = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
   const completedTasks = tasks.filter((t) => t.status === "done");
 
+  const pendingGroups = segmentTasks(pendingTasks);
+
   function handleOpenCreate() {
     setEditingTask(null);
     setFormOpen(true);
+  }
+
+  function handleOpenDetail(task: Task) {
+    setDetailTask(task);
+    setDetailOpen(true);
   }
 
   function handleOpenEdit(task: Task) {
@@ -216,19 +302,14 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
           </CardContent>
         </Card>
 
-        {/* Today's tasks */}
+        {/* Tasks segmented by date */}
         <Card className="dark-glass">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Aujourd&apos;hui
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pendingTasks.length === 0 && completedTasks.length === 0 ? (
+          <CardContent className="pt-4">
+            {pendingGroups.length === 0 && completedTasks.length === 0 ? (
               <div className="flex flex-col items-center py-6 text-center">
                 <ListTodo className="mb-2 h-8 w-8 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">
-                  Aucune tache pour aujourd&apos;hui
+                  Aucune tache
                 </p>
                 <Button
                   variant="link"
@@ -240,29 +321,49 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-1">
-                {pendingTasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onEdit={handleOpenEdit}
-                  />
+              <div className="space-y-4">
+                {pendingGroups.map((group) => (
+                  <div key={group.key}>
+                    <div className="pb-1">
+                      <span
+                        className={`text-xs font-semibold uppercase tracking-wide ${
+                          group.key === "overdue"
+                            ? "text-red-500"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {group.label} ({group.tasks.length})
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {group.tasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          onClick={handleOpenDetail}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
+
                 {completedTasks.length > 0 && (
-                  <>
-                    <div className="pt-2 pb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
+                  <div>
+                    <div className="pb-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Completees ({completedTasks.length})
                       </span>
                     </div>
-                    {completedTasks.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        onEdit={handleOpenEdit}
-                      />
-                    ))}
-                  </>
+                    <div className="space-y-1">
+                      {completedTasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          onClick={handleOpenDetail}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -276,6 +377,15 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
         </Button>
       </div>
 
+      {/* Task detail dialog (read view) */}
+      <TaskDetail
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        task={detailTask}
+        onEdit={handleOpenEdit}
+      />
+
+      {/* Task form dialog (create / edit) */}
       <TaskForm
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -292,10 +402,10 @@ export function TaskPanel({ category, tasks }: TaskPanelProps) {
 
 function TaskRow({
   task,
-  onEdit,
+  onClick,
 }: {
   task: Task;
-  onEdit: (task: Task) => void;
+  onClick: (task: Task) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const isDone = task.status === "done";
@@ -335,7 +445,7 @@ function TaskRow({
       <button
         type="button"
         className="flex-1 min-w-0 text-left cursor-pointer"
-        onClick={() => onEdit(task)}
+        onClick={() => onClick(task)}
       >
         <div className="flex items-center gap-2">
           <span
