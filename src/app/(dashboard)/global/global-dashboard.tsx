@@ -92,7 +92,7 @@ export function GlobalDashboard({ events, tasks }: GlobalDashboardProps) {
 
   // Perso mode gets its own dedicated layout
   if (activeMode === "perso") {
-    return <PersoDashboard events={events} tasks={tasks} />;
+    return <PersoDashboard events={events} tasks={filteredTasks} />;
   }
 
   return (

@@ -1,3 +1,9 @@
+export interface AxisResource {
+  name: string;
+  url: string;
+  description: string;
+}
+
 export interface GamificationAxis {
   id: string;
   user_id: string;
@@ -8,6 +14,7 @@ export interface GamificationAxis {
   color: string;
   display_order: number;
   is_active: boolean;
+  resources: AxisResource[];
   created_at: string;
   updated_at: string;
 }
@@ -134,6 +141,7 @@ export interface SkillMilestone {
   status: "locked" | "active" | "completed";
   completed_at: string | null;
   parent_id: string | null;
+  discipline: string | null;
   created_at: string;
   updated_at: string;
 }

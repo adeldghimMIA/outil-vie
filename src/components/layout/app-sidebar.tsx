@@ -11,6 +11,7 @@ import {
   Trophy,
   Sparkles,
   Settings,
+  CalendarDays,
 } from "lucide-react";
 import {
   Sidebar,
@@ -37,6 +38,12 @@ const mainNav = [
   { href: "/calendar", label: "Calendrier", icon: Calendar },
   { href: "/tasks", label: "Taches", icon: CheckSquare },
   { href: "/projects", label: "Projets", icon: FolderKanban },
+] as const;
+
+const persoModeNav = [
+  { href: "/global", label: "Mon planning", icon: CalendarDays },
+  { href: "/progression", label: "Progression", icon: Trophy },
+  { href: "/preparer-journee", label: "Preparer ma journee", icon: Sparkles },
 ] as const;
 
 const persoNav = [
@@ -122,67 +129,89 @@ export function AppSidebar() {
       <SidebarSeparator />
 
       <SidebarContent>
-        {/* Main navigation */}
-        <SidebarGroup>
-          <SidebarMenu>
-            {mainNav.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton
-                  render={<Link href={item.href} />}
-                  isActive={isActive(item.href)}
-                  tooltip={item.label}
-                >
-                  <item.icon className="size-4" />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
-
-        <SidebarSeparator />
-
-        {/* Perso - hidden when mode is "pro" */}
-        {showPerso && (
+        {activeMode === "perso" ? (
+          /* ── Perso mode: simplified navigation ────────────── */
           <SidebarGroup>
-            <SidebarGroupLabel>PERSO</SidebarGroupLabel>
             <SidebarMenu>
-              {persoNav.map((item) => (
+              {persoModeNav.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     render={<Link href={item.href} />}
                     isActive={isActive(item.href)}
                     tooltip={item.label}
                   >
-                    <item.icon className={`size-4 ${item.color}`} />
+                    <item.icon className="size-4" />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
           </SidebarGroup>
+        ) : (
+          <>
+            {/* Main navigation */}
+            <SidebarGroup>
+              <SidebarMenu>
+                {mainNav.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      render={<Link href={item.href} />}
+                      isActive={isActive(item.href)}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="size-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarSeparator />
+
+            {/* Perso - hidden when mode is "pro" */}
+            {showPerso && (
+              <SidebarGroup>
+                <SidebarGroupLabel>PERSO</SidebarGroupLabel>
+                <SidebarMenu>
+                  {persoNav.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        render={<Link href={item.href} />}
+                        isActive={isActive(item.href)}
+                        tooltip={item.label}
+                      >
+                        <item.icon className={`size-4 ${item.color}`} />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
+
+            <SidebarSeparator />
+
+            {/* Outils */}
+            <SidebarGroup>
+              <SidebarGroupLabel>OUTILS</SidebarGroupLabel>
+              <SidebarMenu>
+                {outilsNav.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      render={<Link href={item.href} />}
+                      isActive={isActive(item.href)}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="size-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          </>
         )}
-
-        <SidebarSeparator />
-
-        {/* Outils */}
-        <SidebarGroup>
-          <SidebarGroupLabel>OUTILS</SidebarGroupLabel>
-          <SidebarMenu>
-            {outilsNav.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton
-                  render={<Link href={item.href} />}
-                  isActive={isActive(item.href)}
-                  tooltip={item.label}
-                >
-                  <item.icon className="size-4" />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
       </SidebarContent>
 
       {/* Footer */}

@@ -34,14 +34,15 @@ export function RadarChart({ data }: RadarChartProps) {
         <PolarGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <PolarAngleAxis
           dataKey="axis"
-          tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+          tick={{ fontSize: 12, fill: "#d1d5db" }}
+          className="[.recharts-text]:fill-foreground dark:[.recharts-text]:fill-[#d1d5db]"
         />
         <Radar
           name="Progression"
           dataKey="value"
           stroke="hsl(var(--primary))"
           fill="hsl(var(--primary))"
-          fillOpacity={0.2}
+          fillOpacity={0.35}
           strokeWidth={2}
         />
       </RechartsRadarChart>

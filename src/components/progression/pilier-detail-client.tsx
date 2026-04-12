@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import {
   Dumbbell,
   Brain,
@@ -15,6 +15,8 @@ import {
   Clock,
   Award,
   Target,
+  ExternalLink,
+  BookOpen,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +44,7 @@ import type {
   SkillMilestone,
   Badge as BadgeType,
   XPEvent,
+  AxisResource,
 } from "@/types/gamification";
 
 interface ActivitySession {
@@ -94,6 +97,29 @@ export function PilierDetailClient({
   const [isGenerating, setIsGenerating] = useState(false);
 
   const Icon = AXIS_ICONS[axis.slug] ?? Dumbbell;
+
+  // Group milestones by discipline
+  const disciplineGroups = useMemo(() => {
+    const groups = new Map<string, SkillMilestone[]>();
+    const ungrouped: SkillMilestone[] = [];
+
+    for (const m of milestones) {
+      if (m.discipline) {
+        const existing = groups.get(m.discipline) ?? [];
+        existing.push(m);
+        groups.set(m.discipline, existing);
+      } else {
+        ungrouped.push(m);
+      }
+    }
+
+    return { groups, ungrouped };
+  }, [milestones]);
+
+  const hasDisciplines = disciplineGroups.groups.size > 0;
+
+  // Resources
+  const resources: AxisResource[] = Array.isArray(axis.resources) ? axis.resources : [];
 
   function handleComplete(milestoneId: string) {
     startTransition(async () => {
@@ -235,25 +261,77 @@ export function PilierDetailClient({
         </CardContent>
       </Card>
 
-      {/* ── Skill Tree ─────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="size-5" style={{ color: axis.color }} />
-            Arbre de competences
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SkillTree
-            milestones={milestones}
-            axisColor={axis.color}
-            onComplete={handleComplete}
-            onAdd={handleAddMilestone}
-            onGenerateAI={handleGenerateAI}
-            isPending={isPending || isGenerating}
-          />
-        </CardContent>
-      </Card>
+      {/* ── Skill Tree (grouped by discipline when applicable) ───── */}
+      {hasDisciplines ? (
+        <div className="space-y-6">
+          {Array.from(disciplineGroups.groups.entries()).map(
+            ([discipline, disciplineMilestones]) => (
+              <Card key={discipline}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="size-5" style={{ color: axis.color }} />
+                    {discipline}
+                    <Badge variant="secondary" className="text-xs">
+                      {disciplineMilestones.filter((m) => m.status === "completed").length}/
+                      {disciplineMilestones.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <SkillTree
+                    milestones={disciplineMilestones}
+                    axisColor={axis.color}
+                    onComplete={handleComplete}
+                    onAdd={handleAddMilestone}
+                    onGenerateAI={handleGenerateAI}
+                    isPending={isPending || isGenerating}
+                  />
+                </CardContent>
+              </Card>
+            )
+          )}
+          {/* Ungrouped milestones */}
+          {disciplineGroups.ungrouped.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="size-5" style={{ color: axis.color }} />
+                  Autres objectifs
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SkillTree
+                  milestones={disciplineGroups.ungrouped}
+                  axisColor={axis.color}
+                  onComplete={handleComplete}
+                  onAdd={handleAddMilestone}
+                  onGenerateAI={handleGenerateAI}
+                  isPending={isPending || isGenerating}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="size-5" style={{ color: axis.color }} />
+              Arbre de competences
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SkillTree
+              milestones={milestones}
+              axisColor={axis.color}
+              onComplete={handleComplete}
+              onAdd={handleAddMilestone}
+              onGenerateAI={handleGenerateAI}
+              isPending={isPending || isGenerating}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Recent Sessions ────────────────────────────────────────── */}
       {sessions.length > 0 && (
@@ -324,6 +402,39 @@ export function PilierDetailClient({
           </CardHeader>
           <CardContent>
             <BadgeGrid badges={badges} earnedBadgeIds={earnedBadgeIds} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Resources ──────────────────────────────────────────────── */}
+      {resources.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="size-5 text-blue-500" />
+              Ressources
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {resources.map((resource) => (
+                <a
+                  key={resource.url}
+                  href={resource.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                >
+                  <ExternalLink className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{resource.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {resource.description}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

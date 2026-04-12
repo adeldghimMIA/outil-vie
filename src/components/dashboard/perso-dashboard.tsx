@@ -1,23 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
 import {
-  Dumbbell,
-  Brain,
-  Languages,
-  Briefcase,
-  Palette,
-  Users,
-  Heart,
-  Target,
   TrendingUp,
-  type LucideIcon,
+  Target,
+  CheckCircle2,
+  Circle,
+  StickyNote,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarSection } from "@/components/calendar/calendar-section";
 import { RadarChart } from "@/components/progression/radar-chart";
-import { ObjectiveCard } from "@/components/progression/objective-card";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_USER_ID } from "@/lib/default-user";
 import type { CalendarEvent, Task } from "@/types";
@@ -33,30 +26,65 @@ interface PersoDashboardProps {
   tasks: Task[];
 }
 
-const AXIS_ICONS: Record<string, LucideIcon> = {
-  sport: Dumbbell,
-  intelligence: Brain,
-  langues: Languages,
-  carriere: Briefcase,
-  creativite: Palette,
-  social: Users,
-  sante: Heart,
-};
-
-interface PilierData {
-  axis: GamificationAxis;
-  level: UserLevel;
+interface HabitItem {
+  id: string;
+  label: string;
+  checked: boolean;
 }
 
+const DEFAULT_HABITS: Omit<HabitItem, "checked">[] = [
+  { id: "routine-matin", label: "Routine matin complete" },
+  { id: "pas-tel-15min", label: "Pas de telephone 15 premieres minutes" },
+  { id: "journal-3-lignes", label: "Journal 3 lignes ce soir" },
+  { id: "meditation", label: "Meditation / stretching" },
+  { id: "espagnol", label: "Session espagnol" },
+  { id: "lecture", label: "Lecture 20min" },
+];
+
 export function PersoDashboard({ events, tasks }: PersoDashboardProps) {
-  const router = useRouter();
-  const [piliers, setPiliers] = useState<PilierData[]>([]);
   const [objectives, setObjectives] = useState<GamificationObjective[]>([]);
   const [radarData, setRadarData] = useState<RadarDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Habits state (persisted in localStorage)
+  const [habits, setHabits] = useState<HabitItem[]>([]);
+  const [newTaskText, setNewTaskText] = useState("");
+
+  // Perso-only tasks (small tasks, not events)
+  const persoTasks = tasks.filter((t) => t.category === "perso" && t.status !== "done" && t.status !== "cancelled");
+
   // Filter events to perso only
   const persoEvents = events.filter((e) => e.category === "perso");
+
+  // Initialize habits from localStorage
+  useEffect(() => {
+    const todayKey = `habits-${new Date().toISOString().slice(0, 10)}`;
+    const stored = localStorage.getItem(todayKey);
+    if (stored) {
+      try {
+        setHabits(JSON.parse(stored) as HabitItem[]);
+      } catch {
+        setHabits(DEFAULT_HABITS.map((h) => ({ ...h, checked: false })));
+      }
+    } else {
+      setHabits(DEFAULT_HABITS.map((h) => ({ ...h, checked: false })));
+    }
+  }, []);
+
+  // Persist habits to localStorage
+  const toggleHabit = useCallback(
+    (id: string) => {
+      setHabits((prev) => {
+        const next = prev.map((h) =>
+          h.id === id ? { ...h, checked: !h.checked } : h
+        );
+        const todayKey = `habits-${new Date().toISOString().slice(0, 10)}`;
+        localStorage.setItem(todayKey, JSON.stringify(next));
+        return next;
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -90,23 +118,6 @@ export function PersoDashboard({ events, tasks }: PersoDashboardProps) {
         const levels = (levelsResult.data ?? []) as UserLevel[];
         const objs = (objectivesResult.data ?? []) as GamificationObjective[];
 
-        // Build pilier data - match axes with their levels
-        const pilierData: PilierData[] = axes.map((axis) => {
-          const level = levels.find((l) => l.axis_id === axis.id) ?? {
-            id: "",
-            user_id: DEFAULT_USER_ID,
-            axis_id: axis.id,
-            total_xp: 0,
-            current_level: 1,
-            xp_for_next_level: 25,
-            current_streak: 0,
-            longest_streak: 0,
-            last_activity_date: null,
-            updated_at: new Date().toISOString(),
-          };
-          return { axis, level };
-        });
-
         // Build radar data
         const radar: RadarDataPoint[] = axes.map((axis) => {
           const level = levels.find((l) => l.axis_id === axis.id);
@@ -118,7 +129,6 @@ export function PersoDashboard({ events, tasks }: PersoDashboardProps) {
           };
         });
 
-        setPiliers(pilierData);
         setObjectives(objs);
         setRadarData(radar);
       } catch {
@@ -133,6 +143,9 @@ export function PersoDashboard({ events, tasks }: PersoDashboardProps) {
       cancelled = true;
     };
   }, []);
+
+  const completedHabitsCount = habits.filter((h) => h.checked).length;
+  const habitsTotal = habits.length;
 
   return (
     <div className="space-y-4">
@@ -158,90 +171,99 @@ export function PersoDashboard({ events, tasks }: PersoDashboardProps) {
         </CardContent>
       </Card>
 
-      {/* ── MA JOURNEE - Calendar in day view ────────────────────── */}
-      <div>
-        <h2 className="mb-3 text-base font-semibold">Ma journee</h2>
-        <CalendarSection
-          category="perso"
-          events={persoEvents}
-          defaultView="day"
-          checkableMode
-        />
-      </div>
+      {/* ── Two-column layout: Planning + Habitudes ──────────────── */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+        {/* LEFT: Mon planning du jour */}
+        <div>
+          <h2 className="mb-3 text-base font-semibold">Mon planning du jour</h2>
+          <CalendarSection
+            category="perso"
+            events={persoEvents}
+            defaultView="day"
+            checkableMode
+          />
+        </div>
 
-      {/* ── MES PILIERS - 2x3 grid ──────────────────────────────── */}
-      <div>
-        <h2 className="mb-3 text-base font-semibold">Mes piliers</h2>
-        {loading ? (
-          <div className="text-sm text-muted-foreground">Chargement...</div>
-        ) : piliers.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            Aucun pilier configure
-          </div>
-        ) : (
-          <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-            {piliers.map(({ axis, level }) => {
-              const Icon = AXIS_ICONS[axis.slug] ?? Dumbbell;
-              const xpInLevel =
-                level.total_xp - (level.current_level - 1) ** 2 * 25;
-              const xpNeeded =
-                level.xp_for_next_level -
-                (level.current_level - 1) ** 2 * 25;
-              const progress =
-                xpNeeded > 0
-                  ? Math.min(100, (xpInLevel / xpNeeded) * 100)
-                  : 0;
-
-              return (
-                <Card
-                  key={axis.id}
-                  className="cursor-pointer transition-all hover:ring-1 hover:ring-primary/30"
-                  onClick={() => router.push(`/progression/${axis.slug}`)}
+        {/* RIGHT: Habitudes + Tasks */}
+        <aside className="space-y-4">
+          {/* Habitudes du jour */}
+          <Card className="dark-glass">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="size-4 text-emerald-500" />
+                  Habitudes du jour
+                </span>
+                <span className="text-xs text-muted-foreground font-normal">
+                  {completedHabitsCount}/{habitsTotal}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {habits.map((habit) => (
+                <button
+                  key={habit.id}
+                  type="button"
+                  onClick={() => toggleHabit(habit.id)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
                 >
-                  <CardContent className="p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="flex size-7 items-center justify-center rounded-md"
-                        style={{
-                          backgroundColor: `${axis.color}20`,
-                          color: axis.color,
-                        }}
-                      >
-                        <Icon className="size-3.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {axis.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Niv. {level.current_level}
-                        </p>
-                      </div>
-                    </div>
-                    {/* Mini XP bar */}
-                    <div className="space-y-0.5">
-                      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${progress}%`,
-                            backgroundColor: axis.color,
-                          }}
-                        />
-                      </div>
-                      <p className="text-[10px] text-muted-foreground text-right">
-                        {xpInLevel}/{xpNeeded} XP
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                  {habit.checked ? (
+                    <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                  ) : (
+                    <Circle className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span
+                    className={
+                      habit.checked
+                        ? "line-through text-muted-foreground"
+                        : ""
+                    }
+                  >
+                    {habit.label}
+                  </span>
+                </button>
+              ))}
+              {/* Progress bar */}
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                  style={{
+                    width: `${habitsTotal > 0 ? (completedHabitsCount / habitsTotal) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Taches perso */}
+          <Card className="dark-glass">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <StickyNote className="size-4 text-amber-500" />
+                Taches perso
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {persoTasks.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Aucune tache perso en cours
+                </p>
+              )}
+              {persoTasks.slice(0, 6).map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+                >
+                  <Circle className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{task.title}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </aside>
       </div>
 
-      {/* ── OBJECTIFS ACTIFS ─────────────────────────────────────── */}
+      {/* ── MES OBJECTIFS ACTIFS ─────────────────────────────────── */}
       <div>
         <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
           <Target className="size-4 text-primary" />
@@ -254,11 +276,40 @@ export function PersoDashboard({ events, tasks }: PersoDashboardProps) {
             Aucun objectif actif
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {objectives.map((objective) => (
-              <ObjectiveCard key={objective.id} objective={objective} />
-            ))}
-          </div>
+          <Card className="dark-glass">
+            <CardContent className="py-3 space-y-2">
+              {objectives.map((obj) => (
+                <div key={obj.id} className="flex items-start gap-3 py-1">
+                  <div className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{obj.title}</p>
+                    {obj.description && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {obj.description}
+                      </p>
+                    )}
+                    {obj.deadline && (
+                      <p className="text-xs text-muted-foreground">
+                        Echeance :{" "}
+                        {new Date(obj.deadline).toLocaleDateString("fr-FR", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </p>
+                    )}
+                  </div>
+                  {obj.target_value && obj.target_value > 0 && (
+                    <div className="ml-auto shrink-0">
+                      <span className="text-xs text-muted-foreground">
+                        {obj.current_value}/{obj.target_value}{" "}
+                        {obj.unit ?? ""}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>
