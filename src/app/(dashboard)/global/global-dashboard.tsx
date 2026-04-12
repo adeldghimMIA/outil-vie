@@ -4,6 +4,7 @@ import { useMemo, useEffect, useState } from "react";
 import { CalendarSection } from "@/components/calendar/calendar-section";
 import { TaskPanel } from "@/components/tasks/task-panel";
 import { DailyStatsBar } from "@/components/gamification/daily-stats-bar";
+import { PersoDashboard } from "@/components/dashboard/perso-dashboard";
 import { useUIStore } from "@/stores/ui-store";
 import { createClient } from "@/lib/supabase/client";
 import { calculateLevel } from "@/lib/gamification/level-calculator";
@@ -88,6 +89,11 @@ export function GlobalDashboard({ events, tasks }: GlobalDashboardProps) {
       cancelled = true;
     };
   }, []);
+
+  // Perso mode gets its own dedicated layout
+  if (activeMode === "perso") {
+    return <PersoDashboard events={events} tasks={tasks} />;
+  }
 
   return (
     <div className="space-y-4">

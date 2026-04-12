@@ -20,7 +20,7 @@ import type { GamificationAxis, UserLevel } from "@/types/gamification";
 interface AxisCardProps {
   axis: GamificationAxis;
   level: UserLevel;
-  onLogSession: () => void;
+  onLogSession: (e: React.MouseEvent) => void;
 }
 
 const AXIS_ICONS: Record<string, LucideIcon> = {
@@ -63,7 +63,7 @@ export function AxisCard({ axis, level, onLogSession }: AxisCardProps) {
             currentStreak={level.current_streak}
             longestStreak={level.longest_streak}
           />
-          <Button size="sm" variant="outline" onClick={onLogSession}>
+          <Button size="sm" variant="outline" onClick={(e) => onLogSession(e)}>
             Logger une session
           </Button>
         </div>

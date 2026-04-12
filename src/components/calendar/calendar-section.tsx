@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useTransition, useRef } from "react";
+import { useState, useMemo, useCallback, useTransition, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon } from "lucide-react";
@@ -28,19 +28,34 @@ import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { toast } from "sonner";
 import { EventForm } from "@/components/calendar/event-form";
 import { MoveEventDialog } from "@/components/calendar/move-event-dialog";
+import { CheckableEventBlock } from "@/components/calendar/checkable-event-block";
 import { updateEvent } from "@/app/actions/events";
+import {
+  toggleEventCompletion,
+  getDailyCompletions,
+} from "@/app/actions/daily-checklist";
+import { DEFAULT_USER_ID } from "@/lib/default-user";
 import type { CalendarView, EventCategory, CalendarEvent } from "@/types";
 
 interface CalendarSectionProps {
   category: EventCategory | null;
   events: CalendarEvent[];
+  /** Force a default view instead of "week" */
+  defaultView?: CalendarView;
+  /** Enable checkable event blocks (used in perso mode) */
+  checkableMode?: boolean;
 }
 
 const hours = Array.from({ length: 15 }, (_, i) => i + 7); // 7h - 21h
 
-export function CalendarSection({ category, events }: CalendarSectionProps) {
+export function CalendarSection({
+  category,
+  events,
+  defaultView,
+  checkableMode = false,
+}: CalendarSectionProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<CalendarView>("week");
+  const [view, setView] = useState<CalendarView>(defaultView ?? "week");
   const [formOpen, setFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [clickedDate, setClickedDate] = useState<Date | undefined>(undefined);
@@ -56,6 +71,71 @@ export function CalendarSection({ category, events }: CalendarSectionProps) {
     newEnd: Date;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Checkable mode state
+  const [completedEventIds, setCompletedEventIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [, startCheckTransition] = useTransition();
+
+  // Fetch daily completions when in checkable mode
+  useEffect(() => {
+    if (!checkableMode) return;
+    let cancelled = false;
+
+    const dateStr = currentDate.toISOString().slice(0, 10);
+    getDailyCompletions(DEFAULT_USER_ID, dateStr)
+      .then((ids) => {
+        if (!cancelled) setCompletedEventIds(new Set(ids));
+      })
+      .catch(() => {
+        // silently fail
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [checkableMode, currentDate]);
+
+  // Handle toggle for checkable events
+  const handleToggleCompletion = useCallback(
+    (eventId: string, date: string) => {
+      // Optimistic update
+      setCompletedEventIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(eventId)) {
+          next.delete(eventId);
+        } else {
+          next.add(eventId);
+        }
+        return next;
+      });
+
+      startCheckTransition(async () => {
+        try {
+          const result = await toggleEventCompletion(eventId, date);
+          if (result.xpAwarded > 0) {
+            toast.success(`+${result.xpAwarded} XP`);
+          } else {
+            toast.info(`${result.xpAwarded} XP`);
+          }
+        } catch {
+          // Revert optimistic update on error
+          setCompletedEventIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(eventId)) {
+              next.delete(eventId);
+            } else {
+              next.add(eventId);
+            }
+            return next;
+          });
+          toast.error("Erreur lors de la mise a jour");
+        }
+      });
+    },
+    []
+  );
 
   // Track whether a drag actually occurred to suppress click after drag
   const didDragRef = useRef(false);
@@ -270,6 +350,9 @@ export function CalendarSection({ category, events }: CalendarSectionProps) {
                 events={events}
                 onCellClick={handleOpenCreate}
                 onEventClick={handleEventClick}
+                checkableMode={checkableMode}
+                completedEventIds={completedEventIds}
+                onToggleCompletion={handleToggleCompletion}
               />
             ) : view === "day" ? (
               <DayView
@@ -278,6 +361,9 @@ export function CalendarSection({ category, events }: CalendarSectionProps) {
                 events={events}
                 onCellClick={handleOpenCreate}
                 onEventClick={handleEventClick}
+                checkableMode={checkableMode}
+                completedEventIds={completedEventIds}
+                onToggleCompletion={handleToggleCompletion}
               />
             ) : (
               <div className="flex items-center justify-center p-12 text-muted-foreground">
@@ -524,12 +610,18 @@ function WeekView({
   events,
   onCellClick,
   onEventClick,
+  checkableMode = false,
+  completedEventIds,
+  onToggleCompletion,
 }: {
   weekDays: Date[];
   category: EventCategory | null;
   events: CalendarEvent[];
   onCellClick: (date: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
+  checkableMode?: boolean;
+  completedEventIds?: Set<string>;
+  onToggleCompletion?: (eventId: string, date: string) => void;
 }) {
   const eventsByDay = useMemo(
     () =>
@@ -599,13 +691,33 @@ function WeekView({
               key={day.toISOString()}
               className="pointer-events-auto relative border-l"
             >
-              {blocks.map((block) => (
-                <DraggableEventBlock
-                  key={block.event.id}
-                  block={block}
-                  onClick={onEventClick}
-                />
-              ))}
+              {blocks.map((block) =>
+                checkableMode && onToggleCompletion ? (
+                  <div
+                    key={block.event.id}
+                    className="absolute inset-x-0.5 z-10"
+                    style={{
+                      top: `${block.top}%`,
+                      height: `${block.height}%`,
+                      minHeight: "18px",
+                    }}
+                  >
+                    <CheckableEventBlock
+                      event={block.event}
+                      isChecked={completedEventIds?.has(block.event.id) ?? false}
+                      onToggle={onToggleCompletion}
+                      color={block.event.color ?? "#3b82f6"}
+                      isSimplified={block.isSimplified}
+                    />
+                  </div>
+                ) : (
+                  <DraggableEventBlock
+                    key={block.event.id}
+                    block={block}
+                    onClick={onEventClick}
+                  />
+                )
+              )}
             </div>
           ))}
         </div>
@@ -624,12 +736,18 @@ function DayView({
   events,
   onCellClick,
   onEventClick,
+  checkableMode = false,
+  completedEventIds,
+  onToggleCompletion,
 }: {
   date: Date;
   category: EventCategory | null;
   events: CalendarEvent[];
   onCellClick: (date: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
+  checkableMode?: boolean;
+  completedEventIds?: Set<string>;
+  onToggleCompletion?: (eventId: string, date: string) => void;
 }) {
   const blocks = useMemo(
     () => getEventBlocksForDay(date, events, category),
@@ -659,13 +777,33 @@ function DayView({
         style={{ height: `${hours.length * 56}px` }} // 56px = h-14
       >
         <div className="pointer-events-auto relative h-full">
-          {blocks.map((block) => (
-            <DraggableEventBlock
-              key={block.event.id}
-              block={block}
-              onClick={onEventClick}
-            />
-          ))}
+          {blocks.map((block) =>
+            checkableMode && onToggleCompletion ? (
+              <div
+                key={block.event.id}
+                className="absolute inset-x-0.5 z-10"
+                style={{
+                  top: `${block.top}%`,
+                  height: `${block.height}%`,
+                  minHeight: "18px",
+                }}
+              >
+                <CheckableEventBlock
+                  event={block.event}
+                  isChecked={completedEventIds?.has(block.event.id) ?? false}
+                  onToggle={onToggleCompletion}
+                  color={block.event.color ?? "#3b82f6"}
+                  isSimplified={block.isSimplified}
+                />
+              </div>
+            ) : (
+              <DraggableEventBlock
+                key={block.event.id}
+                block={block}
+                onClick={onEventClick}
+              />
+            )
+          )}
         </div>
       </div>
     </div>

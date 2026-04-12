@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type {
   ProgressionPageData,
+  SkillMilestone,
   RadarDataPoint,
 } from "@/types/gamification";
 import { getLevelProgress } from "@/lib/gamification/level-calculator";
@@ -14,6 +16,7 @@ import {
   Target,
   Award,
   Clock,
+  ChevronRight,
 } from "lucide-react";
 import {
   Card,
@@ -21,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { RadarChart } from "./radar-chart";
 import { LevelBadge } from "./level-badge";
 import { AxisCard } from "./axis-card";
@@ -31,9 +35,13 @@ import { ChallengeCard } from "./challenge-card";
 
 interface ProgressionClientProps {
   data: ProgressionPageData;
+  activeMilestones?: SkillMilestone[];
 }
 
-export function ProgressionClient({ data }: ProgressionClientProps) {
+export function ProgressionClient({
+  data,
+  activeMilestones = [],
+}: ProgressionClientProps) {
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [preselectedAxisId, setPreselectedAxisId] = useState<
     string | undefined
@@ -67,6 +75,9 @@ export function ProgressionClient({ data }: ProgressionClientProps) {
 
   // All axes for the form
   const allAxes = data.axes.map((ap) => ap.axis);
+
+  // Map axis ID to axis data for milestone display
+  const axisById = new Map(data.axes.map((ap) => [ap.axis.id, ap.axis]));
 
   return (
     <div className="space-y-6">
@@ -149,17 +160,79 @@ export function ProgressionClient({ data }: ProgressionClientProps) {
         </CardContent>
       </Card>
 
+      {/* ── Active Milestones ──────────────────────────────────────── */}
+      {activeMilestones.length > 0 && (
+        <div>
+          <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
+            <Target className="size-4 text-primary" />
+            Objectifs actifs
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {activeMilestones.map((milestone) => {
+              const milestoneAxis = axisById.get(milestone.axis_id);
+              return (
+                <Link
+                  key={milestone.id}
+                  href={`/progression/${milestoneAxis?.slug ?? ""}`}
+                >
+                  <Card
+                    size="sm"
+                    className="cursor-pointer transition-colors hover:bg-muted/50"
+                  >
+                    <CardContent className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="size-2.5 shrink-0 rounded-full"
+                          style={{
+                            backgroundColor: milestoneAxis?.color ?? "hsl(var(--primary))",
+                          }}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {milestone.title}
+                          </p>
+                          {milestoneAxis && (
+                            <p className="text-xs text-muted-foreground">
+                              {milestoneAxis.name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="secondary" className="text-[10px]">
+                          +{milestone.xp_reward} XP
+                        </Badge>
+                        <ChevronRight className="size-4 text-muted-foreground" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Axis Cards Grid ────────────────────────────────────────── */}
       <div>
         <h2 className="mb-3 text-base font-semibold">Axes de progression</h2>
         <div className="grid gap-4 md:grid-cols-2">
           {data.axes.map((ap) => (
-            <AxisCard
+            <Link
               key={ap.axis.id}
-              axis={ap.axis}
-              level={ap.level}
-              onLogSession={() => handleLogSession(ap.axis.id)}
-            />
+              href={`/progression/${ap.axis.slug}`}
+              className="block"
+            >
+              <AxisCard
+                axis={ap.axis}
+                level={ap.level}
+                onLogSession={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleLogSession(ap.axis.id);
+                }}
+              />
+            </Link>
           ))}
         </div>
       </div>

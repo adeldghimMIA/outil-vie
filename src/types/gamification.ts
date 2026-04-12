@@ -121,6 +121,23 @@ export interface ProgressionPageData {
   recentXPEvents: XPEvent[];
 }
 
+export interface SkillMilestone {
+  id: string;
+  user_id: string;
+  axis_id: string;
+  title: string;
+  description: string | null;
+  order_index: number;
+  target_date: string | null;
+  duration_weeks: number | null;
+  xp_reward: number;
+  status: "locked" | "active" | "completed";
+  completed_at: string | null;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Radar chart data point
 export interface RadarDataPoint {
   axis: string;
